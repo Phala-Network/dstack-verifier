@@ -8,8 +8,8 @@ import type { VmConfig } from '../types'
 /** Promisified version of child_process.exec for async/await usage */
 const execAsync = promisify(exec)
 
-/** Path to the local dstack-mr-cli binary */
-const DSTACK_MR_CLI_PATH = '/usr/local/bin/dstack-mr-cli'
+/** Docker image containing the DStack measurement CLI tool */
+const DSTACK_MR_DOCKER_IMAGE = 'shelvenzhou49/dstack-mr-cli:latest'
 
 /**
  * Configuration options for DStack image measurement operations.
@@ -83,17 +83,17 @@ export async function measureDstackImages(
   rtmr2: string
 }> {
   const cliArguments = buildCliArgs(measurementOptions.vm_config)
+  const argumentsString = cliArguments.join(' ')
   const absoluteImagePath = path.resolve(measurementOptions.image_folder)
-  const metadataPath = path.join(absoluteImagePath, 'metadata.json')
 
-  const command = `${DSTACK_MR_CLI_PATH} measure "${metadataPath}" ${cliArguments.join(' ')}`
+  const dockerCommand = `docker run --rm --privileged -v "${absoluteImagePath}":/app/dstack-images ${DSTACK_MR_DOCKER_IMAGE} measure /app/dstack-images/metadata.json ${argumentsString}`
 
   try {
-    const { stdout } = await execAsync(command)
+    const { stdout } = await execAsync(dockerCommand)
     return safeParseOsMeasurement(stdout)
-  } catch (execError: unknown) {
-    const error = execError as { stderr?: string; message: string }
-    const errorMessage = error.stderr || error.message
+  } catch (dockerError: unknown) {
+    const execError = dockerError as { stderr?: string; message: string }
+    const errorMessage = execError.stderr || execError.message
     throw new Error(`Failed to run DStack measurement tool: ${errorMessage}`)
   }
 }
