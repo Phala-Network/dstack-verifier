@@ -95,51 +95,15 @@ RUN apk add --no-cache git
 # Install dstack-mr using go install
 RUN go install github.com/kvinwang/dstack-mr@latest
 
-# DStack images download stage - separate for better caching
-FROM alpine:3.19 AS dstack-downloader
-
-# Install wget and tar
-RUN apk add --no-cache wget
-
-# Create directory
-WORKDIR /app
-RUN mkdir -p external/dstack-images
-
-# Download dstack-0.5.3
-RUN cd external/dstack-images && \
-  wget -O dstack-0.5.3.tar.gz https://github.com/Dstack-TEE/meta-dstack/releases/download/v0.5.3/dstack-0.5.3.tar.gz
-
-# Extract dstack-0.5.3
-RUN cd external/dstack-images && \
-  tar -xzf dstack-0.5.3.tar.gz && \
-  rm dstack-0.5.3.tar.gz
-
-# Download dstack-nvidia-0.5.3
-RUN cd external/dstack-images && \
-  wget -O dstack-nvidia-0.5.3.tar.gz https://github.com/nearai/private-ml-sdk/releases/download/v0.5.3/dstack-nvidia-0.5.3.tar.gz
-
-# Extract dstack-nvidia-0.5.3
-RUN cd external/dstack-images && \
-  tar -xzf dstack-nvidia-0.5.3.tar.gz && \
-  rm dstack-nvidia-0.5.3.tar.gz
-
-# Download dstack-nvidia-dev-0.5.3
-RUN cd external/dstack-images && \
-  wget -O dstack-nvidia-dev-0.5.3.tar.gz https://github.com/nearai/private-ml-sdk/releases/download/v0.5.3/dstack-nvidia-dev-0.5.3.tar.gz
-
-# Extract dstack-nvidia-dev-0.5.3
-RUN cd external/dstack-images && \
-  tar -xzf dstack-nvidia-dev-0.5.3.tar.gz && \
-  rm dstack-nvidia-dev-0.5.3.tar.gz
-
 # Runtime stage - shared base for both development and production
 FROM deps AS runtime
 
-# Install runtime dependencies for QEMU and dstack-mr-cli
+# Install runtime dependencies for QEMU, dstack-mr-cli, and wget for image downloads
 RUN apt-get update && \
   apt-get install -y --no-install-recommends \
   libglib2.0-0 \
-  libslirp0 && \
+  libslirp0 \
+  wget && \
   rm -rf /var/lib/apt/lists/*
 
 # Copy built dcap-qvl binary
@@ -163,8 +127,8 @@ COPY --from=qemu-builder /build/qemu-tdx/pc-bios/efi-virtio.rom /usr/local/share
 COPY --from=qemu-builder /build/qemu-tdx/pc-bios/kvmvapic.bin /usr/local/share/qemu/
 COPY --from=qemu-builder /build/qemu-tdx/pc-bios/linuxboot_dma.bin /usr/local/share/qemu/
 
-# Copy dstack images from downloader stage
-COPY --from=dstack-downloader /app/external/dstack-images ./external/dstack-images
+# Create directory for dstack images (will be downloaded on-demand at runtime)
+RUN mkdir -p external/dstack-images
 
 # Final stage - shared base with all necessary files
 FROM runtime AS final
